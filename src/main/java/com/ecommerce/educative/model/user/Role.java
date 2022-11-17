@@ -1,4 +1,4 @@
-package com.ecommerce.educative.model;
+package com.ecommerce.educative.model.user;
 
 import java.io.Serializable;
 

@@ -13,6 +13,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @Table(name = "tokens")
 public class AuthenticationToken {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")

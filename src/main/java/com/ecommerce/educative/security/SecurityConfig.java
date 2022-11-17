@@ -1,75 +1,86 @@
 package com.ecommerce.educative.security;
 
+import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
+import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
-
-import static org.springframework.security.config.Customizer.withDefaults;
-
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import com.ecommerce.educative.security.jwt.JWTAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
-  private BCryptPasswordEncoder bCryptPasswordEncoder;
+  private final RsaKeyProperties jwtConfigProperties;
+
+  public SecurityConfig(RsaKeyProperties jwtConfigProperties) {
+    this.jwtConfigProperties = jwtConfigProperties;
+  }
 
   @Bean
-  protected SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    http
+  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    return http
         .csrf(csrf -> csrf.disable())
-        .authorizeRequests()
-        .antMatchers("/cart/**").permitAll()
+        .authorizeRequests(auth -> auth
+            .mvcMatchers("/auth/**").permitAll()
+            .mvcMatchers("/user/**").permitAll()
+            .antMatchers("/user/**").hasRole("admin")
+            .anyRequest().authenticated())
+        .sessionManagement(session ->
+        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .oauth2ResourceServer(OAuth2ResourceServerConfigurer::jwt)
+        .exceptionHandling((ex) -> ex
+        .authenticationEntryPoint(new BearerTokenAuthenticationEntryPoint())
+        .accessDeniedHandler(new BearerTokenAccessDeniedHandler()))
+        .httpBasic(Customizer.withDefaults()) //
+        .build();
+  }
 
-        .antMatchers(HttpMethod.GET, "/category/**").permitAll()
-        .antMatchers("/category/**").hasRole("admin")
+  @Bean
+  JwtDecoder jwtDecoder() {
+    return NimbusJwtDecoder.withPublicKey(jwtConfigProperties.getPublicKey()).build();
+  }
 
-        .antMatchers(HttpMethod.GET, "/product/**").permitAll()
-        .antMatchers("/product/**").hasRole("admin")
-
-        .antMatchers("/role/**").hasRole("admin")
-
-        .antMatchers("/wishlist/**").permitAll()
-
-        .antMatchers("/category/**").hasRole("admin")
-
-        .antMatchers(HttpMethod.POST, "/user/**").permitAll()
-        .antMatchers("/user/**").hasRole("admin")
-
-        .anyRequest()
-        .authenticated()
-        .and()
-        .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
-        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .httpBasic(withDefaults());
-
-    return http.build();
+  @Bean
+  JwtEncoder jwtEncoder() {
+    JWK jwk = new RSAKey.Builder(jwtConfigProperties.getPublicKey()).privateKey(jwtConfigProperties.getPrivateKey())
+        .build();
+    JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(new JWKSet(jwk));
+    return new NimbusJwtEncoder(jwks);
   }
 
   @Bean
   protected UserDetailsService userDetailsService() {
     UserDetails adminUser = User.builder()
         .username("admin")
-        .password(bCryptPasswordEncoder.encode("admin2"))
+        .password(passwordEncoder().encode("admin"))
         .roles("admin")
         .build();
 
     UserDetails user = User.builder()
         .username("user")
-        .password(bCryptPasswordEncoder.encode("user2"))
+        .password(passwordEncoder().encode("user"))
         .roles("user")
         .build();
 
@@ -78,13 +89,37 @@ public class SecurityConfig {
   }
 
   @Bean
-  public AuthenticationManager authenticationManager(
-      AuthenticationConfiguration authenticationConfiguration) throws Exception {
-    return authenticationConfiguration.getAuthenticationManager();
+  public BCryptPasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
   }
-
-  @Bean
-  public JWTAuthenticationFilter jwtAuthenticationFilter() {
-    return new JWTAuthenticationFilter();
-  }
+  // @Bean
+  // CorsConfigurationSource corsConfigurationSource() {
+  // CorsConfiguration configuration = new CorsConfiguration();
+  // configuration.setAllowedOrigins(List.of("https://localhost:8080"));
+  // configuration.setAllowedHeaders(List.of("*"));
+  // configuration.setAllowedMethods(List.of("GET"));
+  // UrlBasedCorsConfigurationSource source = new
+  // UrlBasedCorsConfigurationSource();
+  // source.registerCorsConfiguration("/**", configuration);
+  // return source;
+  // }
 }
+
+// .antMatchers("/cart/**").permitAll()
+
+// .antMatchers(HttpMethod.GET, "/category/**").permitAll()
+// .antMatchers("/category/**").hasRole("admin")
+
+// .antMatchers(HttpMethod.GET, "/product/**").permitAll()
+// .antMatchers("/product/**").hasRole("admin")
+
+// .antMatchers("/role/**").hasRole("admin")
+
+// .antMatchers("/wishlist/**").permitAll()
+
+// .antMatchers("/category/**").hasRole("admin")
+
+// .antMatchers(HttpMethod.POST, "/user/**").permitAll()
+// .antMatchers("/user/**").hasRole("admin")
+
+// }

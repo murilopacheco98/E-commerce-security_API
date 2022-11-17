@@ -4,7 +4,6 @@ import com.ecommerce.educative.common.ApiResponse;
 import com.ecommerce.educative.dto.UserDto.SignInDto;
 import com.ecommerce.educative.dto.UserDto.SignUpDto;
 import com.ecommerce.educative.model.user.UserEntity;
-import com.ecommerce.educative.service.user.CreateRoleUserService;
 import com.ecommerce.educative.service.user.UserService;
 
 import java.util.List;
@@ -26,9 +25,6 @@ public class UserController {
     @Autowired
     UserService userService;
 
-    @Autowired
-    CreateRoleUserService createRoleUserService;
-
     @PostMapping("/register")
     public ResponseEntity<?> signUp(@RequestBody SignUpDto signUpDto) {
         // return userService.signUp(signUpDto);
@@ -43,7 +39,6 @@ public class UserController {
         return new ResponseEntity<>(new ApiResponse(true, "Login success"), HttpStatus.OK);
     }
 
-    @PreAuthorize("user")
     @GetMapping("/getAll")
     public ResponseEntity<List<UserEntity>> users() {
         List<UserEntity> users = userService.listUsers();
